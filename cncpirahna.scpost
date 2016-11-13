@@ -1,0 +1,206 @@
+function OnAbout(event)
+   ctrl = event:GetTextCtrl()
+   ctrl:AppendText("Ray's Piranha post processorMinimum G-code post processor\n")
+   ctrl:AppendText("\n")
+   ctrl:AppendText("Ported from VCarve\n")
+   ctrl:AppendText("Non modal G-codes\n")
+   ctrl:AppendText("Modal coordinates\n")
+   ctrl:AppendText("No comments\n")
+   ctrl:AppendText("Incremental IJ\n")
+   ctrl:AppendText("G-codes used:\n")
+   ctrl:AppendText("G00,G01,G02,G03,G20,G21\n")
+   ctrl:AppendText("M-codes used:\n")
+   ctrl:AppendText("M03,M04,M05,M07,M08,M09\n")
+end
+
+
+
+--  revision 11/13/16
+--  Ray - Make work for pirhana
+
+--  revision 3/2/07
+--  Removed final safety move. This is now done in SheetCam
+
+--   Created 19/10/2004
+--   based on Mach2.post
+
+
+function OnInit()
+   post.SetCommentChars ("()", "[]")  --make sure ( and ) characters do not appear in system text
+   post.Text("( ")
+   post.Text(fileNameOnly)
+   post.Text(" )\n")
+   post.Text("( File created ")
+   post.Text(date)
+   post.Text(" ")
+   post.Text(time)
+   post.Text(" )\n")
+   post.Text("( Material bottom left: X ")
+   post.Number (materialX1 * scale, "0.0000")
+   post.Text(" Y ")
+   post.Number(materialY1 * scale, "0.0000")
+   post.Text(" )\n")
+   post.Text("( Material top right: X ")
+   post.Number (materialX2 * scale, "0.0000")
+   post.Text(" Y ")
+   post.Number(materialY2 * scale, "0.0000")
+   post.Text(" )\n")
+   post.Text("G90 \n")
+   if(scale == metric) then
+      post.Text ("G21\n") --metric mode
+   else
+      post.Text ("G20\n") --inch mode
+   end
+   post.Text("F")
+   post.Number(feedRate * scale, "0.0")
+   post.Eol()
+   post.Text("G64 ")
+   if(scale == metric) then
+      post.Text("P.254")
+   else
+      post.Text("P.01")
+   end
+   post.Eol()
+   post.Text("S 2000\n")
+   post.Text("M3\n")
+   post.Text("G0 Z")
+   post.Number(safeZ * scale, "0.0000")   
+   post.Eol()
+   
+   bigArcs = 1 --stitch arc segments together
+   minArcSize = 0.05 --arcs smaller than this are converted to moves
+end
+
+function OnNewLine()
+end
+
+
+function OnFinish()
+    post.Text("G00 Z")
+    post.Number(safeZ * scale, "0.0000")
+    post.Eol()
+    post.Text("G00 X0.0000 Y0.0000\n")
+    post.Text("M02\n")
+end
+
+function OnRapid()
+   post.Text("F")
+   post.Number(feedRate * scale, "0.0")
+   post.Eol()
+
+   post.Text ("G00 X")
+   post.Number (endX * scale, "0.0000")
+   post.Text(" Y")
+   post.Number (endY * scale, "0.0000")
+   post.Text(" Z")
+   post.Number ((endZ + toolOffset) * scale, "0.0000")
+   post.Eol()
+end
+
+function OnMove()
+   post.Text("F")
+   post.Number(feedRate * scale, "0.0")
+   post.Eol()
+   post.Text ("G01 X")
+   post.Number (endX * scale, "0.0000")
+   post.Text(" Y")
+   post.Number (endY * scale, "0.0000")
+   post.Text(" Z")
+   post.Number ((endZ + toolOffset) * scale, "0.0000")
+   post.Eol()
+end
+
+function OnArc()
+   post.Text("F")
+   post.Number(feedRate * scale, "0.0")
+   post.Eol()
+   if(arcAngle <0) then
+      post.Text ("G03")
+   else
+      post.Text ("G02")
+   end
+   post.Text(" X")
+   post.Number (endX * scale, "0.0000")
+   post.Text(" Y")
+   post.Number (endY * scale, "0.0000")
+   post.Text (" I")
+   post.Number ((arcCentreX - currentX) * scale, "0.0000")
+   post.Text (" J")
+   post.Number ((arcCentreY - currentY) * scale, "0.0000")
+   post.Eol()
+end
+
+
+function OnSpindleCW()
+end
+
+function OnSpindleCCW()
+end
+
+function OnSpindleOff()
+end
+
+
+function OnNewOperation()
+   if (plungeRate <= 0) then
+      post.Warning("WARNING: Plunge rate is zero")
+   end
+   if (feedRate <= 0) then
+      post.Warning("WARNING: Feed rate is zero")
+   end
+end
+
+function OnToolChange()
+end
+
+function OnSpindleChanged()
+   if (spindleSpeed <= 0) then
+      post.Warning("WARNING: Spindle speed is zero")
+   end
+end
+
+function OnNewPart()
+end
+
+
+function OnFloodOn()
+end
+
+function OnMistOn()
+end
+
+function OnCoolantOff()
+end
+
+function OnDrill()
+   post.Error("I don't know what to do with a drill")
+   OnRapid()
+   depth = drillStart
+   buffer = plungeSafety
+   endZ = depth + buffer
+   OnRapid()
+   if(drillRetract < buffer) then
+     buffer = drillRetract
+   end
+   while depth > drillZ do
+      OnRapid()
+      depth = depth - drillPeck
+      if (depth < drillZ) then
+         depth = drillZ
+      end
+      endZ = depth
+      OnMove()
+      if (depth > drillZ) then --retract if we need to take another bite
+         endZ = endZ + drillRetract
+         if (endZ > safeZ) then
+            endZ = safeZ
+         end
+         OnRapid()
+         endZ = depth + buffer
+      end
+   end
+   if (endZ < safeZ) then
+      endZ = safeZ
+      OnRapid()
+   end
+end
