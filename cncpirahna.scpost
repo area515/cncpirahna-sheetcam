@@ -88,10 +88,16 @@ function OnRapid()
    post.Number(feedRate * scale, "0.0")
    post.Eol()
 
-   post.Text ("G00 X")
-   post.Number (endX * scale, "0.0000")
-   post.Text(" Y")
-   post.Number (endY * scale, "0.0000")
+   
+   post.Text ("G00")
+   if(endX < 1e10) then
+      post.Text(" X")
+      post.Number (endX * scale, "0.0000")
+   end
+   if(endY < 1e10) then
+      post.Text(" Y")
+      post.Number (endY * scale, "0.0000")
+   end
    post.Text(" Z")
    post.Number ((endZ + toolOffset) * scale, "0.0000")
    post.Eol()
